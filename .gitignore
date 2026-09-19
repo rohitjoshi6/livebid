@@ -1,0 +1,30 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Go
+bin/
+coverage.out
+*.test
+
+# Node
+node_modules/
+dist/
+build/
+coverage/
+
+# Docker/local data
+.docker-data/
+tmp/
+
