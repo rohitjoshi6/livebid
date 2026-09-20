@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"time"
 )
 
 var ErrInvalidAuction = errors.New("invalid auction")
@@ -12,10 +13,11 @@ var ErrForbidden = errors.New("forbidden")
 
 type Service struct {
 	repo *Repository
+	now  func() time.Time
 }
 
 func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{repo: repo, now: time.Now}
 }
 
 type CreateInput struct {
@@ -96,6 +98,41 @@ func (s *Service) UpdateDraft(ctx context.Context, id string, input UpdateInput)
 		StartingPriceCents: params.startingPriceCents,
 		DurationSeconds:    params.durationSeconds,
 	})
+}
+
+func (s *Service) Start(ctx context.Context, id, sellerID string) (Auction, error) {
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return Auction{}, err
+	}
+	if existing.SellerID != sellerID {
+		return Auction{}, ErrForbidden
+	}
+	if existing.Status != StatusDraft {
+		return Auction{}, ErrInvalidAuction
+	}
+	return s.repo.Start(ctx, id, sellerID, s.now().UTC())
+}
+
+func (s *Service) Cancel(ctx context.Context, id, sellerID string) (Auction, error) {
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return Auction{}, err
+	}
+	if existing.SellerID != sellerID {
+		return Auction{}, ErrForbidden
+	}
+	if existing.Status == StatusCompleted || existing.Status == StatusCancelled {
+		return Auction{}, ErrInvalidAuction
+	}
+	return s.repo.Cancel(ctx, id, sellerID)
+}
+
+func (s *Service) CompleteExpired(ctx context.Context, batchSize int) ([]Auction, error) {
+	if batchSize < 1 {
+		batchSize = 50
+	}
+	return s.repo.CompleteExpired(ctx, s.now().UTC(), batchSize)
 }
 
 type normalizedInput struct {

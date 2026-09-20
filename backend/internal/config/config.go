@@ -16,6 +16,8 @@ type Config struct {
 	AccessTokenTTL     time.Duration
 	CORSAllowedOrigins []string
 	MigrationsDir      string
+	ExpirationInterval time.Duration
+	ExpirationBatch    int
 }
 
 func Load() Config {
@@ -28,6 +30,8 @@ func Load() Config {
 		AccessTokenTTL:     time.Duration(getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 60)) * time.Minute,
 		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")),
 		MigrationsDir:      getEnv("MIGRATIONS_DIR", "migrations"),
+		ExpirationInterval: time.Duration(getEnvInt("AUCTION_EXPIRATION_INTERVAL_SECONDS", 2)) * time.Second,
+		ExpirationBatch:    getEnvInt("AUCTION_EXPIRATION_BATCH_SIZE", 50),
 	}
 }
 

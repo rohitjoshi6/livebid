@@ -44,7 +44,8 @@ func main() {
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTokenTTL)
 	authHandler := auth.NewHandler(auth.NewService(userRepo, tokens), userRepo)
 	auctionRepo := auction.NewRepository(db)
-	auctionHandler := auction.NewHandler(auction.NewService(auctionRepo))
+	auctionService := auction.NewService(auctionRepo)
+	auctionHandler := auction.NewHandler(auctionService)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -66,6 +67,8 @@ func main() {
 			r.Route("/{auctionID}", func(r chi.Router) {
 				r.Get("/", auctionHandler.Get)
 				r.With(livebidmiddleware.RequireAuth(tokens)).Patch("/", auctionHandler.UpdateDraft)
+				r.With(livebidmiddleware.RequireAuth(tokens)).Post("/start", auctionHandler.Start)
+				r.With(livebidmiddleware.RequireAuth(tokens)).Post("/cancel", auctionHandler.Cancel)
 			})
 		})
 	})
@@ -89,6 +92,7 @@ func main() {
 
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go auction.NewExpirationWorker(auctionService, logger, cfg.ExpirationInterval, cfg.ExpirationBatch).Run(shutdownCtx)
 	<-shutdownCtx.Done()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

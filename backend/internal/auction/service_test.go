@@ -19,3 +19,9 @@ func TestValidateAuctionInputNormalizesOptionalImageURL(t *testing.T) {
 		t.Fatalf("unexpected normalized image url: %#v", input.imageURL)
 	}
 }
+
+func TestValidStatusRejectsUnknownStatus(t *testing.T) {
+	if validStatus("paused") {
+		t.Fatal("unexpected valid status")
+	}
+}

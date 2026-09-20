@@ -98,6 +98,34 @@ func (h *Handler) UpdateDraft(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, item)
 }
 
+func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentication is required.")
+		return
+	}
+	item, err := h.service.Start(r.Context(), chi.URLParam(r, "auctionID"), claims.UserID)
+	if err != nil {
+		writeAuctionError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) Cancel(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "Authentication is required.")
+		return
+	}
+	item, err := h.service.Cancel(r.Context(), chi.URLParam(r, "auctionID"), claims.UserID)
+	if err != nil {
+		writeAuctionError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
+}
+
 func parseIntQuery(r *http.Request, key string, fallback int) int {
 	value := r.URL.Query().Get(key)
 	if value == "" {

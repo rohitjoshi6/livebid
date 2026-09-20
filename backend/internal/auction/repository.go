@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 )
 
 var ErrNotFound = errors.New("auction not found")
@@ -120,6 +121,90 @@ func (r *Repository) UpdateDraft(ctx context.Context, id, sellerID string, param
 		return Auction{}, fmt.Errorf("update draft auction: %w", err)
 	}
 	return item, nil
+}
+
+func (r *Repository) Start(ctx context.Context, id, sellerID string, now time.Time) (Auction, error) {
+	var item Auction
+	err := r.db.QueryRowContext(ctx, `
+		UPDATE auctions
+		SET status = 'live',
+			start_time = $3,
+			end_time = $3 + (duration_seconds || ' seconds')::interval,
+			version = version + 1,
+			updated_at = now()
+		WHERE id = $1 AND seller_id = $2 AND status = 'draft'
+		RETURNING
+			id::text, seller_id::text, title, description, image_url,
+			starting_price_cents, current_price_cents, status, duration_seconds,
+			start_time, end_time, winner_id::text, version, created_at, updated_at
+	`, id, sellerID, now).Scan(scanAuction(&item)...)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Auction{}, ErrNotFound
+	}
+	if err != nil {
+		return Auction{}, fmt.Errorf("start auction: %w", err)
+	}
+	return item, nil
+}
+
+func (r *Repository) Cancel(ctx context.Context, id, sellerID string) (Auction, error) {
+	var item Auction
+	err := r.db.QueryRowContext(ctx, `
+		UPDATE auctions
+		SET status = 'cancelled',
+			version = version + 1,
+			updated_at = now()
+		WHERE id = $1 AND seller_id = $2 AND status IN ('draft', 'scheduled', 'live')
+		RETURNING
+			id::text, seller_id::text, title, description, image_url,
+			starting_price_cents, current_price_cents, status, duration_seconds,
+			start_time, end_time, winner_id::text, version, created_at, updated_at
+	`, id, sellerID).Scan(scanAuction(&item)...)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Auction{}, ErrNotFound
+	}
+	if err != nil {
+		return Auction{}, fmt.Errorf("cancel auction: %w", err)
+	}
+	return item, nil
+}
+
+func (r *Repository) CompleteExpired(ctx context.Context, now time.Time, batchSize int) ([]Auction, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		UPDATE auctions
+		SET status = 'completed',
+			version = version + 1,
+			updated_at = now()
+		WHERE id IN (
+			SELECT id
+			FROM auctions
+			WHERE status = 'live' AND end_time <= $1
+			ORDER BY end_time ASC
+			FOR UPDATE SKIP LOCKED
+			LIMIT $2
+		)
+		RETURNING
+			id::text, seller_id::text, title, description, image_url,
+			starting_price_cents, current_price_cents, status, duration_seconds,
+			start_time, end_time, winner_id::text, version, created_at, updated_at
+	`, now, batchSize)
+	if err != nil {
+		return nil, fmt.Errorf("complete expired auctions: %w", err)
+	}
+	defer rows.Close()
+
+	completed := []Auction{}
+	for rows.Next() {
+		var item Auction
+		if err := rows.Scan(scanAuction(&item)...); err != nil {
+			return nil, fmt.Errorf("scan completed auction: %w", err)
+		}
+		completed = append(completed, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate completed auctions: %w", err)
+	}
+	return completed, nil
 }
 
 func selectAuctionSQL() string {
