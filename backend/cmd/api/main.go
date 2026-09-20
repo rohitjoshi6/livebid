@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -12,28 +11,52 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/rohitjoshi6/livebid/backend/internal/auth"
+	"github.com/rohitjoshi6/livebid/backend/internal/config"
+	"github.com/rohitjoshi6/livebid/backend/internal/database"
+	"github.com/rohitjoshi6/livebid/backend/internal/httpx"
+	livebidmiddleware "github.com/rohitjoshi6/livebid/backend/internal/middleware"
+	"github.com/rohitjoshi6/livebid/backend/internal/users"
 )
 
-type config struct {
-	HTTPAddr string
-	AppEnv   string
-}
-
 func main() {
-	cfg := loadConfig()
+	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 
+	ctx := context.Background()
+	db, err := database.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("database connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if err := database.RunMigrations(ctx, db, cfg.MigrationsDir); err != nil {
+		logger.Error("database migrations failed", "error", err)
+		os.Exit(1)
+	}
+
+	userRepo := users.NewRepository(db)
+	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTokenTTL)
+	authHandler := auth.NewHandler(auth.NewService(userRepo, tokens), userRepo)
+
 	router := chi.NewRouter()
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
-	router.Use(middleware.Recoverer)
+	router.Use(chimiddleware.RequestID)
+	router.Use(chimiddleware.RealIP)
+	router.Use(chimiddleware.Recoverer)
+	router.Use(livebidmiddleware.CORS(cfg.CORSAllowedOrigins))
 	router.Use(structuredRequestLogger(logger))
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", healthHandler(cfg))
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/register", authHandler.Register)
+			r.Post("/login", authHandler.Login)
+			r.With(livebidmiddleware.RequireAuth(tokens)).Get("/me", authHandler.Me)
+		})
 	})
 
 	server := &http.Server{
@@ -66,34 +89,12 @@ func main() {
 	logger.Info("api server stopped")
 }
 
-func loadConfig() config {
-	return config{
-		HTTPAddr: getEnv("HTTP_ADDR", ":8080"),
-		AppEnv:   getEnv("APP_ENV", "development"),
-	}
-}
-
-func getEnv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func healthHandler(cfg config) http.HandlerFunc {
+func healthHandler(cfg config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{
 			"status": "ok",
 			"env":    cfg.AppEnv,
 		})
-	}
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		slog.Error("failed to write json response", "error", err)
 	}
 }
 
@@ -101,7 +102,7 @@ func structuredRequestLogger(logger *slog.Logger) func(http.Handler) http.Handle
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			started := time.Now()
-			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			ww := chimiddleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			next.ServeHTTP(ww, r)
 			logger.Info("http request",
 				"method", r.Method,
@@ -109,7 +110,7 @@ func structuredRequestLogger(logger *slog.Logger) func(http.Handler) http.Handle
 				"status", ww.Status(),
 				"bytes", ww.BytesWritten(),
 				"duration_ms", time.Since(started).Milliseconds(),
-				"request_id", middleware.GetReqID(r.Context()),
+				"request_id", chimiddleware.GetReqID(r.Context()),
 			)
 		})
 	}

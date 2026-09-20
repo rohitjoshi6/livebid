@@ -10,6 +10,7 @@ FROM alpine:3.20
 RUN adduser -D -g '' livebid
 USER livebid
 COPY --from=build /bin/livebid-api /bin/livebid-api
+COPY --from=build /src/migrations /migrations
+ENV MIGRATIONS_DIR=/migrations
 EXPOSE 8080
 ENTRYPOINT ["/bin/livebid-api"]
-
