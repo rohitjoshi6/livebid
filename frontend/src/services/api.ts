@@ -75,8 +75,37 @@ export function placeBid(token: string, auctionId: string, amountCents: number) 
   });
 }
 
+export type AuctionPayload = {
+  title: string;
+  description: string;
+  image_url?: string;
+  starting_price_cents: number;
+  duration_seconds: number;
+};
+
+export function createAuction(token: string, payload: AuctionPayload) {
+  return request<Auction>('/auctions/', {
+    token,
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function startAuction(token: string, auctionId: string) {
+  return request<Auction>(`/auctions/${auctionId}/start`, {
+    token,
+    method: 'POST',
+  });
+}
+
+export function cancelAuction(token: string, auctionId: string) {
+  return request<Auction>(`/auctions/${auctionId}/cancel`, {
+    token,
+    method: 'POST',
+  });
+}
+
 export function websocketURL(auctionId: string) {
   const base = API_BASE_URL.replace(/^http/, 'ws').replace(/\/api\/v1$/, '');
   return `${base}/api/v1/auctions/${auctionId}/ws`;
 }
-

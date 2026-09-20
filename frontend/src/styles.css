@@ -13,7 +13,8 @@ button {
   cursor: pointer;
 }
 
-.input {
+.input,
+.textarea {
   min-height: 44px;
   width: 100%;
   border-radius: 8px;
@@ -24,7 +25,14 @@ button {
   outline: none;
 }
 
-.input:focus {
+.textarea {
+  min-height: 88px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
   border-color: #0f766e;
   box-shadow: 0 0 0 3px rgb(15 118 110 / 12%);
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles.css';
-import { getAuction, listAuctions, login, placeBid, register } from './services/api';
+import { cancelAuction, createAuction, getAuction, listAuctions, login, placeBid, register, startAuction } from './services/api';
 import type { Auction, AuthResult, BidResult, RealtimeEvent } from './types/api';
 
 const tokenStorageKey = 'livebid.token';
@@ -116,6 +116,42 @@ function App() {
     }
   }
 
+  async function submitAuction(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token) {
+      setStatus('Log in before creating an auction.');
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    try {
+      const auction = await createAuction(token, {
+        title: String(form.get('title') ?? ''),
+        description: String(form.get('description') ?? ''),
+        image_url: String(form.get('image_url') ?? '') || undefined,
+        starting_price_cents: Math.round(Number(form.get('starting_price')) * 100),
+        duration_seconds: Math.round(Number(form.get('duration_minutes')) * 60),
+      });
+      setAuctions((items) => [auction, ...items]);
+      setSelectedAuction(auction);
+      event.currentTarget.reset();
+      setStatus('Auction draft created.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Could not create auction.');
+    }
+  }
+
+  async function sellerAction(action: 'start' | 'cancel') {
+    if (!token || !selectedAuction) return;
+    try {
+      const updated = action === 'start' ? await startAuction(token, selectedAuction.id) : await cancelAuction(token, selectedAuction.id);
+      setSelectedAuction(updated);
+      setAuctions((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      setStatus(action === 'start' ? 'Auction started.' : 'Auction cancelled.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : `Could not ${action} auction.`);
+    }
+  }
+
   const remaining = useMemo(() => secondsRemaining(selectedAuction?.end_time), [selectedAuction?.end_time, tick]);
   const nextBid = selectedAuction ? selectedAuction.current_price_cents + 100 : 0;
 
@@ -147,6 +183,22 @@ function App() {
               <input className="input" name="password" placeholder="password" type="password" required />
               <button className="primary-button" type="submit">
                 {authMode === 'login' ? 'Sign in' : 'Create account'}
+              </button>
+            </form>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 font-semibold">Create auction</h2>
+            <form className="space-y-3" onSubmit={submitAuction}>
+              <input className="input" name="title" placeholder="title" required />
+              <textarea className="textarea" name="description" placeholder="description" required />
+              <input className="input" name="image_url" placeholder="image URL" />
+              <div className="grid grid-cols-2 gap-3">
+                <input className="input" min="0.01" name="starting_price" placeholder="starting $" step="0.01" type="number" required />
+                <input className="input" min="1" name="duration_minutes" placeholder="minutes" type="number" required />
+              </div>
+              <button className="primary-button" type="submit">
+                Save draft
               </button>
             </form>
           </section>
@@ -201,6 +253,17 @@ function App() {
                   <Metric label="Next valid bid" value={money(nextBid)} />
                   <Metric label="Connection" value={connectionState} />
                 </div>
+
+                {user?.id === selectedAuction.seller_id && (
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button className="secondary-button" onClick={() => sellerAction('start')}>
+                      Start auction
+                    </button>
+                    <button className="secondary-button" onClick={() => sellerAction('cancel')}>
+                      Cancel auction
+                    </button>
+                  </div>
+                )}
 
                 <form className="mt-8 flex gap-3" onSubmit={submitBid}>
                   <input
