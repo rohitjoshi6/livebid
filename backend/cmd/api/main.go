@@ -19,6 +19,7 @@ import (
 	"github.com/rohitjoshi6/livebid/backend/internal/database"
 	"github.com/rohitjoshi6/livebid/backend/internal/httpx"
 	livebidmiddleware "github.com/rohitjoshi6/livebid/backend/internal/middleware"
+	"github.com/rohitjoshi6/livebid/backend/internal/realtime"
 	"github.com/rohitjoshi6/livebid/backend/internal/users"
 )
 
@@ -41,13 +42,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	redisClient := realtime.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword)
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		logger.Warn("redis ping failed; realtime features require redis", "error", err)
+	}
+	defer redisClient.Close()
+	realtimePublisher := realtime.NewRedisPublisher(redisClient)
+
 	userRepo := users.NewRepository(db)
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTokenTTL)
 	authHandler := auth.NewHandler(auth.NewService(userRepo, tokens), userRepo)
 	auctionRepo := auction.NewRepository(db)
 	auctionService := auction.NewService(auctionRepo)
-	auctionHandler := auction.NewHandler(auctionService)
-	biddingHandler := bidding.NewHandler(bidding.NewService(bidding.NewRepository(db)))
+	auctionHandler := auction.NewHandler(auctionService, realtimePublisher)
+	biddingHandler := bidding.NewHandler(bidding.NewService(bidding.NewRepository(db)), realtimePublisher)
+	webSocketHandler := realtime.NewWebSocketHandler(redisClient, logger, cfg.CORSAllowedOrigins)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -68,6 +77,7 @@ func main() {
 			r.With(livebidmiddleware.RequireAuth(tokens)).Post("/", auctionHandler.Create)
 			r.Route("/{auctionID}", func(r chi.Router) {
 				r.Get("/", auctionHandler.Get)
+				r.Get("/ws", webSocketHandler.Subscribe)
 				r.With(livebidmiddleware.RequireAuth(tokens)).Patch("/", auctionHandler.UpdateDraft)
 				r.With(livebidmiddleware.RequireAuth(tokens)).Post("/start", auctionHandler.Start)
 				r.With(livebidmiddleware.RequireAuth(tokens)).Post("/cancel", auctionHandler.Cancel)

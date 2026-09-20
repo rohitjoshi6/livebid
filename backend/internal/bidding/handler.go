@@ -8,14 +8,16 @@ import (
 	"github.com/rohitjoshi6/livebid/backend/internal/auction"
 	"github.com/rohitjoshi6/livebid/backend/internal/auth"
 	"github.com/rohitjoshi6/livebid/backend/internal/httpx"
+	"github.com/rohitjoshi6/livebid/backend/internal/realtime"
 )
 
 type Handler struct {
-	service *Service
+	service   *Service
+	publisher realtime.Publisher
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, publisher realtime.Publisher) *Handler {
+	return &Handler{service: service, publisher: publisher}
 }
 
 type placeBidRequest struct {
@@ -44,6 +46,19 @@ func (h *Handler) Place(w http.ResponseWriter, r *http.Request) {
 		writeBidError(w, err)
 		return
 	}
+	_ = h.publisher.Publish(r.Context(), realtime.Event{
+		Type:      realtime.EventBidPlaced,
+		AuctionID: result.Auction.ID,
+		Data:      result,
+	})
+	_ = h.publisher.Publish(r.Context(), realtime.Event{
+		Type:      realtime.EventPriceUpdated,
+		AuctionID: result.Auction.ID,
+		Data: map[string]any{
+			"current_price_cents": result.Auction.CurrentPriceCents,
+			"version":             result.Auction.Version,
+		},
+	})
 	httpx.WriteJSON(w, http.StatusCreated, result)
 }
 

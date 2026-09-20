@@ -11,6 +11,8 @@ type Config struct {
 	AppEnv             string
 	HTTPAddr           string
 	DatabaseURL        string
+	RedisAddr          string
+	RedisPassword      string
 	JWTSecret          string
 	JWTIssuer          string
 	AccessTokenTTL     time.Duration
@@ -25,6 +27,8 @@ func Load() Config {
 		AppEnv:             getEnv("APP_ENV", "development"),
 		HTTPAddr:           getEnv("HTTP_ADDR", ":8080"),
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://livebid:livebid@localhost:5432/livebid?sslmode=disable"),
+		RedisAddr:          getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:      getEnv("REDIS_PASSWORD", ""),
 		JWTSecret:          getEnv("JWT_SECRET", "replace-with-a-local-dev-secret"),
 		JWTIssuer:          getEnv("JWT_ISSUER", "livebid"),
 		AccessTokenTTL:     time.Duration(getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 60)) * time.Minute,

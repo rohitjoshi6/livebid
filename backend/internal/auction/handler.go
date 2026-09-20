@@ -8,14 +8,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rohitjoshi6/livebid/backend/internal/auth"
 	"github.com/rohitjoshi6/livebid/backend/internal/httpx"
+	"github.com/rohitjoshi6/livebid/backend/internal/realtime"
 )
 
 type Handler struct {
-	service *Service
+	service   *Service
+	publisher realtime.Publisher
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, publisher realtime.Publisher) *Handler {
+	return &Handler{service: service, publisher: publisher}
 }
 
 type auctionRequest struct {
@@ -58,6 +60,11 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		writeAuctionError(w, err)
 		return
 	}
+	_ = h.publisher.Publish(r.Context(), realtime.Event{
+		Type:      realtime.EventAuctionStarted,
+		AuctionID: item.ID,
+		Data:      item,
+	})
 	httpx.WriteJSON(w, http.StatusOK, item)
 }
 
@@ -95,6 +102,11 @@ func (h *Handler) UpdateDraft(w http.ResponseWriter, r *http.Request) {
 		writeAuctionError(w, err)
 		return
 	}
+	_ = h.publisher.Publish(r.Context(), realtime.Event{
+		Type:      realtime.EventAuctionCancelled,
+		AuctionID: item.ID,
+		Data:      item,
+	})
 	httpx.WriteJSON(w, http.StatusOK, item)
 }
 
