@@ -14,6 +14,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/rohitjoshi6/livebid/backend/internal/auction"
 	"github.com/rohitjoshi6/livebid/backend/internal/auth"
+	"github.com/rohitjoshi6/livebid/backend/internal/bidding"
 	"github.com/rohitjoshi6/livebid/backend/internal/config"
 	"github.com/rohitjoshi6/livebid/backend/internal/database"
 	"github.com/rohitjoshi6/livebid/backend/internal/httpx"
@@ -46,6 +47,7 @@ func main() {
 	auctionRepo := auction.NewRepository(db)
 	auctionService := auction.NewService(auctionRepo)
 	auctionHandler := auction.NewHandler(auctionService)
+	biddingHandler := bidding.NewHandler(bidding.NewService(bidding.NewRepository(db)))
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -69,6 +71,7 @@ func main() {
 				r.With(livebidmiddleware.RequireAuth(tokens)).Patch("/", auctionHandler.UpdateDraft)
 				r.With(livebidmiddleware.RequireAuth(tokens)).Post("/start", auctionHandler.Start)
 				r.With(livebidmiddleware.RequireAuth(tokens)).Post("/cancel", auctionHandler.Cancel)
+				r.With(livebidmiddleware.RequireAuth(tokens)).Post("/bids", biddingHandler.Place)
 			})
 		})
 	})
