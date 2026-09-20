@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/rohitjoshi6/livebid/backend/internal/auction"
 	"github.com/rohitjoshi6/livebid/backend/internal/auth"
 	"github.com/rohitjoshi6/livebid/backend/internal/config"
 	"github.com/rohitjoshi6/livebid/backend/internal/database"
@@ -42,6 +43,8 @@ func main() {
 	userRepo := users.NewRepository(db)
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTokenTTL)
 	authHandler := auth.NewHandler(auth.NewService(userRepo, tokens), userRepo)
+	auctionRepo := auction.NewRepository(db)
+	auctionHandler := auction.NewHandler(auction.NewService(auctionRepo))
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -56,6 +59,14 @@ func main() {
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
 			r.With(livebidmiddleware.RequireAuth(tokens)).Get("/me", authHandler.Me)
+		})
+		r.Route("/auctions", func(r chi.Router) {
+			r.Get("/", auctionHandler.List)
+			r.With(livebidmiddleware.RequireAuth(tokens)).Post("/", auctionHandler.Create)
+			r.Route("/{auctionID}", func(r chi.Router) {
+				r.Get("/", auctionHandler.Get)
+				r.With(livebidmiddleware.RequireAuth(tokens)).Patch("/", auctionHandler.UpdateDraft)
+			})
 		})
 	})
 
