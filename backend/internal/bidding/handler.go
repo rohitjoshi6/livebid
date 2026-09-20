@@ -51,6 +51,10 @@ func writeBidError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidBid):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_bid", "Bid amount and auction are required.")
+	case errors.Is(err, ErrMissingIdempotencyKey):
+		httpx.WriteError(w, http.StatusBadRequest, "missing_idempotency_key", "Bid requests require an idempotency key.")
+	case errors.Is(err, ErrIdempotencyConflict):
+		httpx.WriteError(w, http.StatusConflict, "idempotency_conflict", "Idempotency key was already used for a different bid.")
 	case errors.Is(err, auction.ErrNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "auction_not_found", "Auction was not found.")
 	case errors.Is(err, ErrAuctionNotLive):

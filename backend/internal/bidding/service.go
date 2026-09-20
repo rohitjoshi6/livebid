@@ -8,6 +8,7 @@ import (
 )
 
 var ErrInvalidBid = errors.New("invalid bid")
+var ErrMissingIdempotencyKey = errors.New("missing idempotency key")
 
 type Service struct {
 	repo *Repository
@@ -30,6 +31,9 @@ func (s *Service) Place(ctx context.Context, input PlaceInput) (PlaceResult, err
 		return PlaceResult{}, ErrInvalidBid
 	}
 	key := normalizeKey(input.IdempotencyKey)
+	if key == nil {
+		return PlaceResult{}, ErrMissingIdempotencyKey
+	}
 	return s.repo.Place(ctx, PlaceParams{
 		AuctionID:      input.AuctionID,
 		BidderID:       input.BidderID,

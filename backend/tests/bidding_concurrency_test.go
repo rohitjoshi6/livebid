@@ -48,10 +48,11 @@ func TestConcurrentBidsSerializeOnAuctionRow(t *testing.T) {
 			bidderID := insertTestUser(t, ctx, db, fmt.Sprintf("buyer-%d-%d@example.com", runID, i), fmt.Sprintf("buyer-%d-%d", runID, i))
 			amount := int64(1001 + i)
 			_, err := repo.Place(ctx, bidding.PlaceParams{
-				AuctionID:   auctionID,
-				BidderID:    bidderID,
-				AmountCents: amount,
-				Now:         time.Now().UTC(),
+				AuctionID:      auctionID,
+				BidderID:       bidderID,
+				AmountCents:    amount,
+				IdempotencyKey: ptr(fmt.Sprintf("bid-%d", i)),
+				Now:            time.Now().UTC(),
 			})
 			if err == nil {
 				mu.Lock()
@@ -82,6 +83,10 @@ func TestConcurrentBidsSerializeOnAuctionRow(t *testing.T) {
 	if currentPrice != maxAccepted {
 		t.Fatalf("final price = %d, want max accepted bid %d", currentPrice, maxAccepted)
 	}
+}
+
+func ptr(value string) *string {
+	return &value
 }
 
 func insertTestUser(t *testing.T, ctx context.Context, db *sql.DB, email, username string) string {
