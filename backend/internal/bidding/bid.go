@@ -16,6 +16,8 @@ type Bid struct {
 }
 
 type PlaceResult struct {
-	Bid     Bid             `json:"bid"`
-	Auction auction.Auction `json:"auction"`
+	Bid             Bid             `json:"bid"`
+	Auction         auction.Auction `json:"auction"`
+	Extended        bool            `json:"extended"`
+	PreviousEndTime *time.Time      `json:"previous_end_time,omitempty"`
 }

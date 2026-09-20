@@ -11,6 +11,7 @@ const (
 	EventAuctionStarted     = "auction_started"
 	EventBidPlaced          = "bid_placed"
 	EventPriceUpdated       = "price_updated"
+	EventAuctionExtended    = "auction_extended"
 	EventAuctionCancelled   = "auction_cancelled"
 	EventConnectionRestored = "connection_restored"
 )

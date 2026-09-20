@@ -20,6 +20,8 @@ type Config struct {
 	MigrationsDir      string
 	ExpirationInterval time.Duration
 	ExpirationBatch    int
+	AntiSnipingWindow  time.Duration
+	AntiSnipingExtend  time.Duration
 }
 
 func Load() Config {
@@ -36,6 +38,8 @@ func Load() Config {
 		MigrationsDir:      getEnv("MIGRATIONS_DIR", "migrations"),
 		ExpirationInterval: time.Duration(getEnvInt("AUCTION_EXPIRATION_INTERVAL_SECONDS", 2)) * time.Second,
 		ExpirationBatch:    getEnvInt("AUCTION_EXPIRATION_BATCH_SIZE", 50),
+		AntiSnipingWindow:  time.Duration(getEnvInt("ANTI_SNIPING_WINDOW_SECONDS", 10)) * time.Second,
+		AntiSnipingExtend:  time.Duration(getEnvInt("ANTI_SNIPING_EXTENSION_SECONDS", 10)) * time.Second,
 	}
 }
 

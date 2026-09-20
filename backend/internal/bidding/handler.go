@@ -59,6 +59,17 @@ func (h *Handler) Place(w http.ResponseWriter, r *http.Request) {
 			"version":             result.Auction.Version,
 		},
 	})
+	if result.Extended {
+		_ = h.publisher.Publish(r.Context(), realtime.Event{
+			Type:      realtime.EventAuctionExtended,
+			AuctionID: result.Auction.ID,
+			Data: map[string]any{
+				"previous_end_time": result.PreviousEndTime,
+				"end_time":          result.Auction.EndTime,
+				"version":           result.Auction.Version,
+			},
+		})
+	}
 	httpx.WriteJSON(w, http.StatusCreated, result)
 }
 

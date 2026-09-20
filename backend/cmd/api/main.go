@@ -55,7 +55,10 @@ func main() {
 	auctionRepo := auction.NewRepository(db)
 	auctionService := auction.NewService(auctionRepo)
 	auctionHandler := auction.NewHandler(auctionService, realtimePublisher)
-	biddingHandler := bidding.NewHandler(bidding.NewService(bidding.NewRepository(db)), realtimePublisher)
+	biddingHandler := bidding.NewHandler(
+		bidding.NewService(bidding.NewRepository(db), cfg.AntiSnipingWindow, cfg.AntiSnipingExtend),
+		realtimePublisher,
+	)
 	webSocketHandler := realtime.NewWebSocketHandler(redisClient, logger, cfg.CORSAllowedOrigins)
 
 	router := chi.NewRouter()

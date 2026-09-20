@@ -32,6 +32,8 @@ type PlaceParams struct {
 	AmountCents    int64
 	IdempotencyKey *string
 	Now            time.Time
+	ExtendWindow   time.Duration
+	ExtendBy       time.Duration
 }
 
 func (r *Repository) Place(ctx context.Context, params PlaceParams) (PlaceResult, error) {
@@ -93,14 +95,15 @@ func (r *Repository) Place(ctx context.Context, params PlaceParams) (PlaceResult
 		}
 		return PlaceResult{}, err
 	}
-	updated, err := updateAuctionPrice(ctx, tx, params.AuctionID, params.AmountCents)
+	previousEndTime, newEndTime, extended := antiSnipingExtension(item.EndTime, params.Now, params.ExtendWindow, params.ExtendBy)
+	updated, err := updateAuctionPrice(ctx, tx, params.AuctionID, params.AmountCents, newEndTime)
 	if err != nil {
 		return PlaceResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return PlaceResult{}, fmt.Errorf("commit bid transaction: %w", err)
 	}
-	return PlaceResult{Bid: bid, Auction: updated}, nil
+	return PlaceResult{Bid: bid, Auction: updated, Extended: extended, PreviousEndTime: previousEndTime}, nil
 }
 
 func findExistingBid(ctx context.Context, tx *sql.Tx, params PlaceParams) (Bid, bool, error) {
@@ -194,11 +197,12 @@ func insertBid(ctx context.Context, tx *sql.Tx, params PlaceParams) (Bid, error)
 	return bid, nil
 }
 
-func updateAuctionPrice(ctx context.Context, tx *sql.Tx, auctionID string, amountCents int64) (auction.Auction, error) {
+func updateAuctionPrice(ctx context.Context, tx *sql.Tx, auctionID string, amountCents int64, endTime *time.Time) (auction.Auction, error) {
 	var item auction.Auction
 	err := tx.QueryRowContext(ctx, `
 		UPDATE auctions
 		SET current_price_cents = $2,
+			end_time = COALESCE($3, end_time),
 			version = version + 1,
 			updated_at = now()
 		WHERE id = $1
@@ -206,11 +210,23 @@ func updateAuctionPrice(ctx context.Context, tx *sql.Tx, auctionID string, amoun
 			id::text, seller_id::text, title, description, image_url,
 			starting_price_cents, current_price_cents, status, duration_seconds,
 			start_time, end_time, winner_id::text, version, created_at, updated_at
-	`, auctionID, amountCents).Scan(scanAuction(&item)...)
+	`, auctionID, amountCents, endTime).Scan(scanAuction(&item)...)
 	if err != nil {
 		return auction.Auction{}, fmt.Errorf("update auction price: %w", err)
 	}
 	return item, nil
+}
+
+func antiSnipingExtension(currentEnd *time.Time, now time.Time, window, extendBy time.Duration) (*time.Time, *time.Time, bool) {
+	if currentEnd == nil || window <= 0 || extendBy <= 0 {
+		return nil, nil, false
+	}
+	if now.Before(*currentEnd) && !now.Before(currentEnd.Add(-window)) {
+		previous := *currentEnd
+		extended := currentEnd.Add(extendBy)
+		return &previous, &extended, true
+	}
+	return nil, nil, false
 }
 
 func scanAuction(item *auction.Auction) []any {

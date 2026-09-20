@@ -11,12 +11,14 @@ var ErrInvalidBid = errors.New("invalid bid")
 var ErrMissingIdempotencyKey = errors.New("missing idempotency key")
 
 type Service struct {
-	repo *Repository
-	now  func() time.Time
+	repo         *Repository
+	now          func() time.Time
+	extendWindow time.Duration
+	extendBy     time.Duration
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo, now: time.Now}
+func NewService(repo *Repository, extendWindow, extendBy time.Duration) *Service {
+	return &Service{repo: repo, now: time.Now, extendWindow: extendWindow, extendBy: extendBy}
 }
 
 type PlaceInput struct {
@@ -40,6 +42,8 @@ func (s *Service) Place(ctx context.Context, input PlaceInput) (PlaceResult, err
 		AmountCents:    input.AmountCents,
 		IdempotencyKey: key,
 		Now:            s.now().UTC(),
+		ExtendWindow:   s.extendWindow,
+		ExtendBy:       s.extendBy,
 	})
 }
 
