@@ -23,8 +23,11 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
 
 # Docker/local data
 .docker-data/
+.cache/
 tmp/
-
